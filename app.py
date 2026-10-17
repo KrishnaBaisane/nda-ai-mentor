@@ -75,7 +75,7 @@ with st.sidebar:
     
     ai_engine_mode = st.radio(
         "Select Model Provider:",
-        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini)"],
+        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini 3.8 Flash)"],
         index=1,
         help="Switch between local offline privacy mode and Google Gemini Cloud Mode!"
     )
@@ -148,17 +148,6 @@ RULES:
 4. TONE: Sharp, crisp, high-yield, structured Markdown.
 """
 
-def get_gemini_model(sys_instruction=None):
-    """Dynamic fail-safe model initialization"""
-    try:
-        models_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        if models_list:
-            chosen = models_list[0].replace("models/", "")
-            return genai.GenerativeModel(model_name=chosen, system_instruction=sys_instruction)
-    except Exception:
-        pass
-    return genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=sys_instruction)
-
 def execute_llm_call(prompt_text, system_instruction):
     if "Online" in ai_engine_mode:
         active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
@@ -166,7 +155,10 @@ def execute_llm_call(prompt_text, system_instruction):
             return "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
         try:
             genai.configure(api_key=active_key)
-            model = get_gemini_model(system_instruction)
+            model = genai.GenerativeModel(
+                model_name="gemini-3.8-flash",
+                system_instruction=system_instruction
+            )
             response = model.generate_content(prompt_text)
             return response.text
         except Exception as e:
@@ -207,7 +199,10 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                         return
                     try:
                         genai.configure(api_key=active_key)
-                        model = get_gemini_model(SYSTEM_PROMPT)
+                        model = genai.GenerativeModel(
+                            model_name="gemini-3.8-flash",
+                            system_instruction=SYSTEM_PROMPT
+                        )
                         
                         contents = []
                         for msg in trimmed_messages:
