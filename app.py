@@ -81,7 +81,7 @@ with st.sidebar:
     )
 
     if "Online" in ai_engine_mode:
-        gemini_key = st.text_input("Gemini API Key (Optional Override):", type="password", placeholder="Paste Key...", help="Leave blank if API key is configured in Streamlit Secrets")
+        gemini_key = st.text_input("Gemini API Key (Optional Override):", type="password", placeholder="AIzaSy...", help="Leave blank if API key is configured in Streamlit Secrets")
     else:
         gemini_key = ""
 
@@ -149,11 +149,10 @@ RULES:
 """
 
 def get_gemini_model():
-    """Fetch available model dynamically to prevent 404 errors"""
+    """Dynamic model fetcher to prevent 404 errors"""
     try:
         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         if available_models:
-            # First priority to flash models, otherwise pick first available
             flash_models = [m for m in available_models if 'flash' in m]
             chosen_model = flash_models[0] if flash_models else available_models[0]
             clean_name = chosen_model.replace("models/", "")
