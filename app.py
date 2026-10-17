@@ -193,7 +193,7 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                 trimmed_messages = current_messages[-6:] if len(current_messages) > 6 else current_messages
                 
                 if "Online" in ai_engine_mode:
-                    active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
+                   active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
                     if not active_key:
                         yield "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
                         return
