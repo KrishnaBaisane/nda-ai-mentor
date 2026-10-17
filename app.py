@@ -70,34 +70,36 @@ if "current_session_id" not in st.session_state:
 if "user_custom_key" not in st.session_state:
     st.session_state.user_custom_key = ""
 
-def get_active_groq_model(client):
-    """Guaranteed Groq Production Chat Model"""
-    preferred_models = [
-        "llama-3.3-70b-versatile",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768"
-    ]
+# Guaranteed working production models priority order
+GROQ_MODELS = [
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-specdec",
+    "mixtral-8x7b-32768",
+    "llama3-70b-8192"
+]
+
+def get_working_groq_model(client):
     try:
-        available = [m.id for m in client.models.list().data if "llama" in m.id.lower() or "mixtral" in m.id.lower()]
-        for model in preferred_models:
-            if model in available:
+        available_models = [m.id for m in client.models.list().data]
+        for model in GROQ_MODELS:
+            if model in available_models:
                 return model
+        if available_models:
+            return available_models[0]
     except Exception:
         pass
-    return "llama-3.3-70b-versatile"
+    return "llama-3.1-8b-instant"
 
 # SIDEBAR CONTROLS
 with st.sidebar:
     st.header("🔑 Groq API Setup")
     
-    # User Manual Box
-    with st.expander("📖 Free API Key Kaise Banayein? (Click Here)", expanded=not bool(st.session_state.user_custom_key)):
+    with st.expander("📖 Free API Key Kaise Banayein?", expanded=not bool(st.session_state.user_custom_key)):
         st.markdown("""
-        **Simple 3-Step Guide:**
-        1. Niche **'🌐 Generate Free API Key'** button par click karein.
+        **3 Simple Steps:**
+        1. Click: **'Generate Free API Key'** button.
         2. **'Continue with Google'** se Sign-In karein.
-        3. **'Create API Key'** dabakar string (`gsk_...`) copy karein, yahan paste karke **Proceed** karein!
+        3. **'Create API Key'** karke string (`gsk_...`) copy karein aur niche paste karke **Proceed** karein!
         """)
         st.link_button("🌐 Generate Free API Key", "https://console.groq.com/keys")
 
@@ -181,7 +183,7 @@ def execute_groq_call(prompt_text, system_instruction):
         return "⚠️ **API Key Missing:** Sidebar mein apni Groq API Key daal kar 'Proceed & Connect' dabaayein!"
     try:
         client = Groq(api_key=st.session_state.user_custom_key.strip())
-        chosen_model = get_active_groq_model(client)
+        chosen_model = get_working_groq_model(client)
         response = client.chat.completions.create(
             model=chosen_model,
             messages=[
@@ -210,13 +212,14 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
 
         with st.chat_message("assistant"):
             def response_generator():
+                client = Groq(api_key=st.session_state.user_custom_key.strip())
+                chosen_model = get_working_groq_model(client)
+                
+                messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
+                for msg in current_messages[-6:]:
+                    messages_to_send.append({"role": msg["role"], "content": msg["content"]})
+
                 try:
-                    client = Groq(api_key=st.session_state.user_custom_key.strip())
-                    chosen_model = get_active_groq_model(client)
-                    messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
-                    for msg in current_messages[-6:]:
-                        messages_to_send.append({"role": msg["role"], "content": msg["content"]})
-                    
                     completion = client.chat.completions.create(
                         model=chosen_model,
                         messages=messages_to_send,
@@ -225,8 +228,20 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                     for chunk in completion:
                         content = chunk.choices[0].delta.content or ""
                         yield content
-                except Exception as e:
-                    yield f"❌ Groq Error: {str(e)}"
+                except Exception:
+                    # Fallback model if chosen model throws error
+                    fallback_model = "llama-3.1-8b-instant" if chosen_model != "llama-3.1-8b-instant" else "mixtral-8x7b-32768"
+                    try:
+                        completion = client.chat.completions.create(
+                            model=fallback_model,
+                            messages=messages_to_send,
+                            stream=True
+                        )
+                        for chunk in completion:
+                            content = chunk.choices[0].delta.content or ""
+                            yield content
+                    except Exception as err:
+                        yield f"❌ Groq Error: {str(err)}"
 
             output_text = st.write_stream(response_generator())
             current_messages.append({"role": "assistant", "content": output_text})
