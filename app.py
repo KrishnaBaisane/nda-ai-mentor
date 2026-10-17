@@ -1,22 +1,23 @@
 import streamlit as st
 import json
 import os
+import random
 from datetime import datetime
 from PIL import Image
 import pytesseract
 from groq import Groq
 
-st.set_page_config(page_title="NDA Exam Prep & Debug AI Mentor", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="NDA Exam Prep & Ultra-Fast AI Mentor", page_icon="🎓", layout="wide")
 
-# Custom UI Styling
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
     .stButton>button { border-radius: 8px; font-weight: bold; width: 100%; }
+    .manual-box { background-color: #1a1c23; padding: 12px; border-radius: 8px; border-left: 4px solid #00d46a; margin-bottom: 10px; }
 </style>
-""", unsafe_allow_html=True)
+""", unsafe_unsafe_html=True if hasattr(st, "unsafe_html") else True)
 
-st.title("🎓 NDA Exam Prep & AI Mentor (Direct Key Mode)")
+st.title("🎓 NDA Exam Prep & Multi-Key Groq AI Mentor")
 st.markdown("---")
 
 HISTORY_FILE = "nda_chat_sessions.json"
@@ -68,28 +69,90 @@ if "current_session_id" not in st.session_state:
         st.session_state.all_sessions[default_id] = {"title": "General NDA Prep", "messages": []}
         save_sessions(st.session_state.all_sessions)
 
-if "active_groq_key" not in st.session_state:
-    st.session_state.active_groq_key = ""
+if "user_custom_key" not in st.session_state:
+    st.session_state.user_custom_key = ""
+
+def get_rotated_groq_client():
+    """Selects User Custom Key if provided, otherwise picks from Server Pool"""
+    if st.session_state.user_custom_key.strip():
+        return Groq(api_key=st.session_state.user_custom_key.strip())
+    
+    keys_pool = st.secrets.get("GROQ_API_KEYS", [])
+    if not keys_pool:
+        single_key = st.secrets.get("GROQ_API_KEY", None) or os.getenv("GROQ_API_KEY")
+        if single_key:
+            keys_pool = [single_key]
+            
+    if not keys_pool:
+        return None
+    
+    selected_key = random.choice(keys_pool)
+    return Groq(api_key=selected_key)
+
+def get_active_groq_model(client):
+    preferred_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768"
+    ]
+    try:
+        available = [m.id for m in client.models.list().data]
+        for model in preferred_models:
+            if model in available:
+                return model
+        if available:
+            return available[0]
+    except Exception:
+        pass
+    return "llama-3.1-8b-instant"
 
 # SIDEBAR CONTROLS
 with st.sidebar:
-    st.header("🔑 Direct Key Auth")
+    st.header("⚡ AI Engine Status")
     
-    # Key Input & Proceed Button
-    groq_key_input = st.text_input("Enter Groq API Key:", type="password", placeholder="gsk_...", value=st.session_state.active_groq_key, help="Paste your Groq Key here and click Proceed!")
-    
-    if st.button("🚀 Proceed & Connect Key"):
-        if groq_key_input.strip():
-            st.session_state.active_groq_key = groq_key_input.strip()
-            st.success("✅ Key Locked & Ready!")
-            st.rerun()
-        else:
-            st.error("⚠️ Pehle Key enter karein!")
-
-    if st.session_state.active_groq_key:
-        st.info("🟢 Groq Engine Connected")
+    # Connection Badge
+    if st.session_state.user_custom_key:
+        st.success("🟢 Active: **Custom API Key Connected**")
     else:
-        st.warning("🔴 Engine Disconnected (Key Needed)")
+        st.info("🟢 Active: **Default Free Shared Pool**")
+
+    # Expandable User Guide / Manual for Key Generation
+    with st.expander("💡 Unlimited Access: Create Your API Key"):
+        st.markdown("""
+        **Kaise create karein personal API Key?**
+        1. Click: **'Generate Free API Key'** button.
+        2. Select **'Continue with Google'** to log in.
+        3. Click **'Create API Key'** & Copy the string (`gsk_...`).
+        4. Paste key below & click **'Apply Key'**!
+        """)
+        st.link_button("🌐 Generate Free API Key", "https://console.groq.com/keys")
+
+    # Custom Key Input Area
+    custom_key_input = st.text_input(
+        "Enter Your API Key (Optional):", 
+        type="password", 
+        placeholder="gsk_...", 
+        value=st.session_state.user_custom_key,
+        help="Custom key enters unlimited private session mode!"
+    )
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("🚀 Apply Key"):
+            if custom_key_input.strip():
+                st.session_state.user_custom_key = custom_key_input.strip()
+                st.toast("✅ Custom API Key Activated!", icon="🔑")
+                st.rerun()
+            else:
+                st.warning("Pehle key enter karein!")
+    with col_b:
+        if st.button("🔄 Reset"):
+            st.session_state.user_custom_key = ""
+            st.toast("Switched back to Shared Pool!", icon="🔄")
+            st.rerun()
 
     st.markdown("---")
     st.header("🚀 Advanced Modules")
@@ -138,33 +201,26 @@ RULES:
 2. Provide structured, sharp, high-yield Markdown responses for NDA preparation.
 """
 
-def get_active_groq_model(client):
-    preferred_models = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile",
-        "llama-3.1-8b-instant",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768"
-    ]
+def execute_groq_call(prompt_text, system_instruction):
+    client = get_rotated_groq_client()
+    if not client:
+        return "⚠️ **Groq API Key Missing:** Streamlit Secrets mein `GROQ_API_KEYS` list configure karein!"
     try:
-        available = [m.id for m in client.models.list().data]
-        for model in preferred_models:
-            if model in available:
-                return model
-        if available:
-            return available[0]
-    except Exception:
-        pass
-    return "llama-3.1-8b-instant"
+        chosen_model = get_active_groq_model(client)
+        response = client.chat.completions.create(
+            model=chosen_model,
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt_text}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"❌ Groq Error: {str(e)}"
 
 # TAB 1: ADAPTIVE CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
     def execute_ai_query(user_prompt):
-        if not st.session_state.active_groq_key:
-            st.error("👈 Pehle Sidebar mein apni Groq API Key daal kar 'Proceed' button dabayein!")
-            return
-
         current_messages.append({"role": "user", "content": user_prompt})
         
         if len(current_messages) == 1:
@@ -174,34 +230,36 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
             st.markdown(user_prompt)
 
         with st.chat_message("assistant"):
-            def response_generator():
-                try:
-                    client = Groq(api_key=st.session_state.active_groq_key)
-                    chosen_model = get_active_groq_model(client)
-                    
-                    messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
-                    for msg in current_messages[-6:]:
-                        messages_to_send.append({"role": msg["role"], "content": msg["content"]})
-                    
-                    completion = client.chat.completions.create(
-                        model=chosen_model,
-                        messages=messages_to_send,
-                        stream=True
-                    )
-                    for chunk in completion:
-                        content = chunk.choices[0].delta.content or ""
-                        yield content
-                except Exception as e:
-                    yield f"❌ Debug Error: {str(e)}"
+            client = get_rotated_groq_client()
+            if not client:
+                ans = "⚠️ **Groq API Key Missing:** Streamlit Secrets mein `GROQ_API_KEYS` configure karein!"
+                st.markdown(ans)
+            else:
+                def response_generator():
+                    try:
+                        chosen_model = get_active_groq_model(client)
+                        messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
+                        for msg in current_messages[-6:]:
+                            messages_to_send.append({"role": msg["role"], "content": msg["content"]})
+                        
+                        completion = client.chat.completions.create(
+                            model=chosen_model,
+                            messages=messages_to_send,
+                            stream=True
+                        )
+                        for chunk in completion:
+                            content = chunk.choices[0].delta.content or ""
+                            yield content
+                    except Exception as e:
+                        yield f"❌ Groq Error: {str(e)}"
 
-            output_text = st.write_stream(response_generator())
-            current_messages.append({"role": "assistant", "content": output_text})
-            save_sessions(st.session_state.all_sessions)
+                output_text = st.write_stream(response_generator())
+                current_messages.append({"role": "assistant", "content": output_text})
+                save_sessions(st.session_state.all_sessions)
 
     if len(current_messages) == 0:
         welcome_text = (
             f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Groq AI Mentor** active hai.\n\n"
-            f"👈 **Sidebar mein Key paste karke 'Proceed' button dabayein.**\n\n"
             f"🎯 **Target:** `{target_exam}` ({target_date_str}) | **Attempt:** `{attempt_no}`"
         )
         current_messages.append({"role": "assistant", "content": welcome_text})
@@ -217,11 +275,13 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
 # TAB 2: OCR EVALUATOR
 elif active_tab == "📸 OCR Handwritten Answer Evaluator":
     st.subheader("📸 OCR Answer Evaluator")
-    if not st.session_state.active_groq_key:
-        st.warning("👈 Sidebar mein Groq API Key daal kar Proceed karein!")
+    uploaded_file = st.file_uploader("Upload Answer Sheet (PNG/JPG):", type=["png", "jpg", "jpeg"])
+    if uploaded_file is not None and st.button("Evaluate"):
+        st.info(execute_groq_call("Evaluate this answer sheet for NDA exam standards", "You are an NDA Examiner"))
 
 # TAB 3: SSB OIR
 elif active_tab == "🎙️ SSB OIR Interactive Voice Module":
-    st.subheader("🎙️ SSB OIR Voice Practice")
-    if not st.session_state.active_groq_key:
-        st.warning("👈 Sidebar mein Groq API Key daal kar Proceed karein!")
+    st.subheader("🎙️ SSB OIR Voice Practice Engine")
+    user_voice_input = st.text_input("Your Response:")
+    if user_voice_input and st.button("Evaluate"):
+        st.success(execute_groq_call(user_voice_input, "Evaluate SSB OIR response"))
