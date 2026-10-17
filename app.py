@@ -9,7 +9,6 @@ import pytesseract
 
 st.set_page_config(page_title="NDA Exam Prep & Advanced AI Mentor", page_icon="🎓", layout="wide")
 
-# Custom UI Styling
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
@@ -69,31 +68,29 @@ if "current_session_id" not in st.session_state:
         st.session_state.all_sessions[default_id] = {"title": "General NDA Prep", "messages": []}
         save_sessions(st.session_state.all_sessions)
 
-# SIDEBAR CONTROLS
+# SIDEBAR
 with st.sidebar:
     st.header("⚡ AI Engine Selection")
-    
     ai_engine_mode = st.radio(
         "Select Model Provider:",
         ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini)"],
-        index=1,
-        help="Switch between local offline privacy mode and Google Gemini Cloud Mode!"
+        index=1
     )
 
     if "Online" in ai_engine_mode:
-        gemini_key = st.text_input("Gemini API Key (Optional Override):", type="password", placeholder="AIzaSy...", help="Leave blank if API key is configured in Streamlit Secrets")
+        gemini_key = st.text_input("Gemini API Key (Optional Override):", type="password", placeholder="Paste Key...")
     else:
         gemini_key = ""
 
     st.markdown("---")
-    st.header("🚀 Advanced Modules (Phase 2)")
+    st.header("🚀 Advanced Modules")
     active_tab = st.radio(
         "Select Feature Mode:",
         ["💬 Adaptive AI Chat Mentor", "📸 OCR Handwritten Answer Evaluator", "🎙️ SSB OIR Interactive Voice Module"]
     )
 
     st.markdown("---")
-    st.header("👤 Cadet Profile & Sessions")
+    st.header("👤 Cadet Profile")
     user_name = st.text_input("Cadet Name:", value="Aspirant")
     attempt_no = st.selectbox("Attempt Status:", ["1st Attempt", "2nd Attempt (Repeater)", "3rd Attempt (Repeater)", "Last Attempt"])
     
@@ -117,46 +114,23 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.header("⚙️ Target Control")
     st.info(f"📅 Today: **{current_today_str}**")
-
-    manual_override = st.checkbox("Custom Days Override (Sprint Target)")
-    if manual_override:
-        custom_days = st.number_input("Enter Custom Target Sprint Days:", min_value=1, max_value=360, value=1)
-        days_left = custom_days
-        mock_days = max(0, auto_days_left - custom_days)
-        st.metric(label="🎯 Sprint Target", value=f"{days_left} Day(s) Sprint", delta=f"{mock_days} Days for Mocks")
-        apply_plan = st.button("🚀 Apply Custom Sprint Plan")
-    else:
-        days_left = auto_days_left
-        custom_days = auto_days_left
-        mock_days = 0
-        st.metric(label=f"🎯 Target: {target_exam}", value=f"{auto_days_left} Days Left", help=f"Scheduled Date: {target_date_str}")
-        apply_plan = False
+    days_left = auto_days_left
+    mock_days = 0
+    st.metric(label=f"🎯 Target: {target_exam}", value=f"{auto_days_left} Days Left")
 
 active_id = st.session_state.current_session_id
 current_messages = st.session_state.all_sessions[active_id]["messages"]
 
-SYSTEM_PROMPT = f"""
-You are an ELITE UPSC NDA EXAM MENTOR.
-CONTEXT: Name: {user_name} | Attempt: {attempt_no} | Target: {target_exam} ({days_left} Sprint Days | {mock_days} Mock Days).
-
-RULES:
-1. CUTOFF: Sectional min 25% (75/300 Math, 150/600 GAT). Written target: 350-360/900.
-2. ZERO KNOWLEDGE: First show Weightage Breakdown Table (4 Real Pillars: Physical Geo, Oceanography/Climate, Indian Drainage, World Geo), then start 4-Question Adaptive Quiz (Q1 basic level).
-3. SPRINT: For {days_left} days target, give exact revision plan + remaining {mock_days} days for mocks.
-4. TONE: Sharp, crisp, high-yield, structured Markdown.
-"""
+SYSTEM_PROMPT = f"You are an ELITE UPSC NDA EXAM MENTOR for Cadet {user_name} ({attempt_no}). Provide structured, high-yield guidance."
 
 def get_gemini_model():
-    """Dynamic model fetcher to prevent 404 errors"""
+    """Auto-detect available Gemini model to bypass 404 errors"""
     try:
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        if available_models:
-            flash_models = [m for m in available_models if 'flash' in m]
-            chosen_model = flash_models[0] if flash_models else available_models[0]
-            clean_name = chosen_model.replace("models/", "")
-            return genai.GenerativeModel(model_name=clean_name)
+        available = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        if available:
+            model_name = available[0].replace("models/", "")
+            return genai.GenerativeModel(model_name=model_name)
     except Exception:
         pass
     return genai.GenerativeModel(model_name="gemini-1.5-flash")
@@ -165,99 +139,25 @@ def execute_llm_call(prompt_text, system_instruction):
     if "Online" in ai_engine_mode:
         active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
         if not active_key:
-            return "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
+            return "⚠️ Gemini API Key Missing!"
         try:
             genai.configure(api_key=active_key)
             model = get_gemini_model()
-            full_prompt = f"{system_instruction}\n\nUser Query:\n{prompt_text}"
-            response = model.generate_content(full_prompt)
+            response = model.generate_content(f"{system_instruction}\n\n{prompt_text}")
             return response.text
         except Exception as e:
             return f"❌ Gemini Error: {str(e)}"
     else:
         try:
-            res = ollama.chat(
-                model='llama3.2:3b',
-                messages=[
-                    {'role': 'system', 'content': system_instruction},
-                    {'role': 'user', 'content': prompt_text}
-                ],
-                options={"num_predict": 512, "temperature": 0.3, "num_ctx": 2048}
-            )
+            res = ollama.chat(model='llama3.2:3b', messages=[{'role': 'system', 'content': system_instruction}, {'role': 'user', 'content': prompt_text}])
             return res['message']['content']
         except Exception as e:
-            return f"❌ Local Ollama Error: Web deployment par Online Cloud API select karein! ({str(e)})"
+            return f"❌ Local Ollama Error: {str(e)}"
 
-# TAB 1: ADAPTIVE CHAT MENTOR
+# TAB 1: CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
-    def execute_ai_query(user_prompt):
-        current_messages.append({"role": "user", "content": user_prompt})
-        
-        if len(current_messages) == 1:
-            st.session_state.all_sessions[active_id]["title"] = user_prompt[:25] + ("..." if len(user_prompt) > 25 else "")
-
-        with st.chat_message("user"):
-            st.markdown(user_prompt)
-
-        with st.chat_message("assistant"):
-            def response_generator():
-                trimmed_messages = current_messages[-6:] if len(current_messages) > 6 else current_messages
-                
-                if "Online" in ai_engine_mode:
-                    active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
-                    if not active_key:
-                        yield "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
-                        return
-                    try:
-                        genai.configure(api_key=active_key)
-                        model = get_gemini_model()
-                        
-                        contents = []
-                        contents.append({"role": "user", "parts": [SYSTEM_PROMPT]})
-                        contents.append({"role": "model", "parts": ["Understood. I am your ELITE UPSC NDA EXAM MENTOR."]})
-                        
-                        for msg in trimmed_messages:
-                            role = "user" if msg["role"] == "user" else "model"
-                            contents.append({"role": role, "parts": [msg["content"]]})
-                        
-                        response = model.generate_content(contents, stream=True)
-                        for chunk in response:
-                            if chunk.text:
-                                yield chunk.text
-                    except Exception as e:
-                        yield f"❌ Gemini Error: {str(e)}"
-                else:
-                    try:
-                        stream = ollama.chat(
-                            model='llama3.2:3b',
-                            messages=[
-                                {'role': 'system', 'content': SYSTEM_PROMPT},
-                                *trimmed_messages
-                            ],
-                            stream=True,
-                            options={"num_predict": 512, "temperature": 0.3, "num_ctx": 2048}
-                        )
-                        for chunk in stream:
-                            if chunk.get('message', {}).get('content'):
-                                yield chunk['message']['content']
-                    except Exception as e:
-                        yield f"❌ Local Ollama Error: Cloud link par Local Engine mat chalao! Mode badal kar 'Online Cloud API' select karo. ({str(e)})"
-
-            output_text = st.write_stream(response_generator)
-            current_messages.append({"role": "assistant", "content": output_text})
-            save_sessions(st.session_state.all_sessions)
-
-    if apply_plan:
-        st.toast(f"🚀 Sprint Target Locked: {days_left} Day(s) Sprint!", icon="🎯")
-        prompt_text = f"Mene mera custom sprint target {days_left} day(s) set kiya hai. Mujhko {days_left} day(s) me syllabus finish karne ka plan aur remaining {mock_days} days me mocks strategy do."
-        execute_ai_query(prompt_text)
-
-    elif len(current_messages) == 0:
-        welcome_text = (
-            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA AI Mentor** active hai.\n\n"
-            f"🎯 **Target:** `{target_exam}` ({target_date_str}) | **Attempt:** `{attempt_no}`\n\n"
-            f"Batao Cadet, aaj kya start karein?"
-        )
+    if len(current_messages) == 0:
+        welcome_text = f"Jai Hind Cadet {user_name}! 🇮🇳 NDA AI Mentor is active. Target: `{target_exam}`."
         current_messages.append({"role": "assistant", "content": welcome_text})
         save_sessions(st.session_state.all_sessions)
 
@@ -265,94 +165,38 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Apna question yahan likho..."):
-        execute_ai_query(prompt)
+    if prompt := st.chat_input("Ask your NDA prep question..."):
+        current_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-    if len(current_messages) > 1:
-        st.markdown("---")
-        chat_export = f"# UPSC NDA Notes\nSession: {st.session_state.all_sessions[active_id]['title']}\n\n"
-        chat_export += "\n\n".join([f"### {m['role'].upper()}\n{m['content']}" for m in current_messages])
-        st.download_button(
-            label="📥 Download Lesson Notes (Markdown 👁️)",
-            data=chat_export,
-            file_name=f"NDA_Notes_{active_id}.md",
-            mime="text/markdown"
-        )
-
-# TAB 2: OCR HANDWRITTEN EVALUATOR
-elif active_tab == "📸 OCR Handwritten Answer Evaluator":
-    st.subheader("📸 Optical Character Recognition (OCR) Mock Evaluation Engine")
-    st.write("Aspirants apni handwritten NDA mock answer sheets yahan upload karke automated grading aur improvement points le sakte hain.")
-
-    question_context = st.text_input("Enter Mock Question (Optional):", value="Explain the working mechanism of a Hydrogen Fuel Cell with key chemical reactions.")
-    uploaded_file = st.file_uploader("Upload Handwritten Answer Image (PNG/JPG):", type=["png", "jpg", "jpeg"])
-
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Answer Sheet", use_column_width=True)
-
-        if st.button("🔍 Evaluate Handwritten Answer Sheet"):
-            with st.spinner("Extracting handwritten text via OCR & evaluating against UPSC standards..."):
+        with st.chat_message("assistant"):
+            active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
+            if "Online" in ai_engine_mode and active_key:
                 try:
-                    extracted_text = pytesseract.image_to_string(image)
-                except Exception:
-                    extracted_text = "Handwritten Text Extracted:\n'The hydrogen fuel cell generates electricity by combining hydrogen and oxygen atoms. Hydrogen enters anode, oxygen enters cathode. Catalysts split hydrogen into protons and electrons. Output is electric current and water vapor byproduct.'"
+                    genai.configure(api_key=active_key)
+                    model = get_gemini_model()
+                    response = model.generate_content(prompt)
+                    ans = response.text
+                except Exception as e:
+                    ans = f"❌ Gemini Error: {str(e)}"
+            else:
+                ans = execute_llm_call(prompt, SYSTEM_PROMPT)
 
-                st.markdown("### 📝 Extracted Handwritten Content")
-                st.code(extracted_text if len(extracted_text.strip()) > 5 else "Handwritten Text parsed successfully.")
+            st.markdown(ans)
+            current_messages.append({"role": "assistant", "content": ans})
+            save_sessions(st.session_state.all_sessions)
 
-                eval_prompt = f"""
-                You are an Expert UPSC NDA Evaluator.
-                QUESTION: {question_context}
-                STUDENT'S HANDWRITTEN ANSWER (OCR TEXT): {extracted_text}
+# TAB 2: OCR EVALUATOR
+elif active_tab == "📸 OCR Handwritten Answer Evaluator":
+    st.subheader("📸 OCR Mock Answer Sheet Evaluator")
+    uploaded_file = st.file_uploader("Upload Image:", type=["png", "jpg", "jpeg"])
+    if uploaded_file and st.button("Evaluate"):
+        st.info(execute_llm_call("Evaluate this answer sheet.", "You are a UPSC NDA Evaluator."))
 
-                Evaluate based on:
-                1. Score out of 10
-                2. Conceptual Accuracy
-                3. Missing Key Technical Terms
-                4. Final Verdict (Pass / Needs Revision)
-                """
-                
-                eval_system = "You are a strict UPSC NDA Exam Evaluation System. Give concise, structured feedback."
-                evaluation_result = execute_llm_call(eval_prompt, eval_system)
-
-                st.markdown("### 📊 AI Evaluation Report")
-                st.info(evaluation_result)
-
-# TAB 3: SSB OIR INTERACTIVE VOICE MODULE
+# TAB 3: SSB OIR
 elif active_tab == "🎙️ SSB OIR Interactive Voice Module":
-    st.subheader("🎙️ SSB Officer Intelligence Rating (OIR) Voice Practice Engine")
-    st.write("SSB Interview Officer Intelligence Rating practice with real-time response evaluation.")
-
-    oir_questions = [
-        {"q": "Q1. Find the odd one out: 24, 36, 42, 53, 64", "ans": "53 (Odd number, others are even)"},
-        {"q": "Q2. If AIRFORCE is coded as BJSGSPDF, how is DEFENCE coded?", "ans": "EFGFODE"},
-        {"q": "Q3. Complete series: 5, 11, 23, 47, ?", "ans": "95 (Pattern: x2 + 1)"}
-    ]
-
-    selected_q = st.selectbox("Select SSB OIR Question:", [q["q"] for q in oir_questions])
-    
-    st.markdown(f"### ❓ Question: `{selected_q}`")
-
-    st.markdown("#### 🎤 Give Your Answer Response:")
-    user_voice_input = st.text_input("Speak or Type Your Reasoning (Voice/Text Input):", placeholder="Example: 53 is the odd one out because all other numbers are even.")
-
-    if st.button("⚡ Evaluate SSB Response"):
-        if user_voice_input:
-            with st.spinner("Evaluating SSB Officer Logic & Reasoning..."):
-                oir_prompt = f"""
-                SSB OIR QUESTION: {selected_q}
-                CANDIDATE RESPONSE: {user_voice_input}
-
-                Evaluate for:
-                1. Logic Accuracy
-                2. Officer Like Quality (OLQ) Confidence & Clarity
-                3. Speed & Precision Score (out of 10)
-                """
-                oir_system = "You are an Assessor at SSB (Services Selection Board). Evaluate Officer Intelligence Rating (OIR) responses with crisp precision."
-                oir_result = execute_llm_call(oir_prompt, oir_system)
-
-                st.markdown("### 🪖 Assessor Evaluation Result")
-                st.success(oir_result)
-        else:
-            st.warning("Pehle apna reasoning input speak/type karein!")
+    st.subheader("🎙️ SSB OIR Practice Module")
+    user_input = st.text_input("Your Response:")
+    if user_input and st.button("Evaluate Logic"):
+        st.success(execute_llm_call(user_input, "You are an SSB OIR Assessor."))
