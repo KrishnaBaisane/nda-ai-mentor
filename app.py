@@ -149,12 +149,17 @@ RULES:
 """
 
 def get_gemini_model():
-    """Fail-safe loader trying standard supported models"""
-    for model_name in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
-        try:
-            return genai.GenerativeModel(model_name=model_name)
-        except Exception:
-            continue
+    """Fetch available model dynamically to prevent 404 errors"""
+    try:
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        if available_models:
+            # First priority to flash models, otherwise pick first available
+            flash_models = [m for m in available_models if 'flash' in m]
+            chosen_model = flash_models[0] if flash_models else available_models[0]
+            clean_name = chosen_model.replace("models/", "")
+            return genai.GenerativeModel(model_name=clean_name)
+    except Exception:
+        pass
     return genai.GenerativeModel(model_name="gemini-1.5-flash")
 
 def execute_llm_call(prompt_text, system_instruction):
