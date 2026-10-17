@@ -148,6 +148,16 @@ RULES:
 4. TONE: Sharp, crisp, high-yield, structured Markdown.
 """
 
+def get_gemini_model():
+    """Fail-safe model loader: Tries available Gemini models automatically"""
+    candidate_models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-pro"]
+    for m in candidate_models:
+        try:
+            return genai.GenerativeModel(model_name=m)
+        except Exception:
+            continue
+    return genai.GenerativeModel(model_name="gemini-1.5-flash")
+
 def execute_llm_call(prompt_text, system_instruction):
     if "Online" in ai_engine_mode:
         active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
@@ -155,9 +165,7 @@ def execute_llm_call(prompt_text, system_instruction):
             return "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
         try:
             genai.configure(api_key=active_key)
-            model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash-latest"
-            )
+            model = get_gemini_model()
             full_prompt = f"{system_instruction}\n\nUser Query:\n{prompt_text}"
             response = model.generate_content(full_prompt)
             return response.text
@@ -199,9 +207,7 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                         return
                     try:
                         genai.configure(api_key=active_key)
-                        model = genai.GenerativeModel(
-                            model_name="gemini-1.5-flash-latest"
-                        )
+                        model = get_gemini_model()
                         
                         contents = []
                         contents.append({"role": "user", "parts": [SYSTEM_PROMPT]})
