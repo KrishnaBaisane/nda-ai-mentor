@@ -15,7 +15,7 @@ st.markdown("""
     .stButton>button { border-radius: 8px; font-weight: bold; width: 100%; }
     .manual-box { background-color: #1a1c23; padding: 12px; border-radius: 8px; border-left: 4px solid #00d46a; margin-bottom: 10px; }
 </style>
-""", unsafe_unsafe_html=True if hasattr(st, "unsafe_html") else True)
+""", unsafe_allow_html=True)
 
 st.title("🎓 NDA Exam Prep & Multi-Key Groq AI Mentor")
 st.markdown("---")
