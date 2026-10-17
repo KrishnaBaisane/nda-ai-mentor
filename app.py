@@ -81,7 +81,7 @@ with st.sidebar:
     )
 
     if "Online" in ai_engine_mode:
-        gemini_key = st.text_input("Gemini API Key (Optional Override):", type="password", placeholder="AIzaSy...", help="Leave blank if API key is configured in Streamlit Secrets")
+        gemini_key = st.text_input("Gemini API Key (Optional Override):", type="password", placeholder="Paste Key...", help="Leave blank if API key is configured in Streamlit Secrets")
     else:
         gemini_key = ""
 
@@ -153,7 +153,6 @@ def get_gemini_model():
     try:
         available = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         if available:
-            # Clean model name string
             model_name = available[0].replace("models/", "")
             return genai.GenerativeModel(model_name=model_name)
     except Exception:
