@@ -90,10 +90,9 @@ def get_rotated_groq_client():
     return Groq(api_key=selected_key)
 
 def get_active_groq_model(client):
-    """Guaranteed Chat-compatible Llama models filter"""
+    """Guaranteed Groq Production Chat Models"""
     preferred_models = [
         "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
         "llama3-70b-8192",
         "llama3-8b-8192",
         "mixtral-8x7b-32768"
@@ -105,7 +104,7 @@ def get_active_groq_model(client):
                 return model
     except Exception:
         pass
-    return "llama-3.1-8b-instant"
+    return "llama-3.3-70b-versatile"
 
 # SIDEBAR CONTROLS
 with st.sidebar:
