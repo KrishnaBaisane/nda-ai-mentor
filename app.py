@@ -75,7 +75,7 @@ with st.sidebar:
     
     ai_engine_mode = st.radio(
         "Select Model Provider:",
-        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini 3.8 Flash)"],
+        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini)"],
         index=1,
         help="Switch between local offline privacy mode and Google Gemini Cloud Mode!"
     )
@@ -156,7 +156,7 @@ def execute_llm_call(prompt_text, system_instruction):
         try:
             genai.configure(api_key=active_key)
             model = genai.GenerativeModel(
-                model_name="gemini-3.8-flash",
+                model_name="gemini-1.5-flash",
                 system_instruction=system_instruction
             )
             response = model.generate_content(prompt_text)
@@ -193,14 +193,14 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                 trimmed_messages = current_messages[-6:] if len(current_messages) > 6 else current_messages
                 
                 if "Online" in ai_engine_mode:
-                   active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
+                    active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
                     if not active_key:
                         yield "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
                         return
                     try:
                         genai.configure(api_key=active_key)
                         model = genai.GenerativeModel(
-                            model_name="gemini-3.8-flash",
+                            model_name="gemini-1.5-flash",
                             system_instruction=SYSTEM_PROMPT
                         )
                         
