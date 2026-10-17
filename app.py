@@ -4,9 +4,9 @@ import os
 from datetime import datetime
 from PIL import Image
 import pytesseract
-from openai import OpenAI
+from groq import Groq
 
-st.set_page_config(page_title="NDA Exam Prep & Grok AI Mentor", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="NDA Exam Prep & Ultra-Fast AI Mentor", page_icon="🎓", layout="wide")
 
 st.markdown("""
 <style>
@@ -15,7 +15,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎓 NDA Exam Prep & Grok AI Mentor")
+st.title("🎓 NDA Exam Prep & Ultra-Fast Groq AI Mentor")
 st.markdown("---")
 
 HISTORY_FILE = "nda_chat_sessions.json"
@@ -70,9 +70,9 @@ if "current_session_id" not in st.session_state:
 # SIDEBAR CONTROLS
 with st.sidebar:
     st.header("⚡ AI Engine Selection")
-    st.info("🌐 Active Engine: **xAI Grok Beta**")
+    st.info("🌐 Active Engine: **Groq Cloud (Llama 3.3 70B)**")
 
-    grok_key = st.text_input("XAI / Grok API Key (Optional Override):", type="password", placeholder="xai-...", help="Leave blank if API key is configured in Streamlit Secrets")
+    groq_key_input = st.text_input("Groq API Key (Optional Override):", type="password", placeholder="gsk_...", help="Leave blank if API key is configured in Streamlit Secrets")
 
     st.markdown("---")
     st.header("🚀 Advanced Modules")
@@ -113,7 +113,7 @@ active_id = st.session_state.current_session_id
 current_messages = st.session_state.all_sessions[active_id]["messages"]
 
 SYSTEM_PROMPT = f"""
-You are an ELITE UPSC NDA EXAM MENTOR powered by Grok.
+You are an ELITE UPSC NDA EXAM MENTOR powered by Groq Llama-3.3.
 CONTEXT: Name: {user_name} | Attempt: {attempt_no} | Target: {target_exam} ({auto_days_left} Days Left).
 
 RULES:
@@ -121,17 +121,19 @@ RULES:
 2. Provide structured, sharp, high-yield Markdown responses for NDA preparation.
 """
 
-def execute_grok_call(prompt_text, system_instruction):
-    active_key = grok_key or st.secrets.get("XAI_API_KEY", None) or os.getenv("XAI_API_KEY")
+def get_groq_client():
+    active_key = groq_key_input or st.secrets.get("GROQ_API_KEY", None) or os.getenv("GROQ_API_KEY")
     if not active_key:
-        return "⚠️ **XAI API Key Missing:** Streamlit Secrets mein XAI_API_KEY configure karein!"
+        return None
+    return Groq(api_key=active_key)
+
+def execute_groq_call(prompt_text, system_instruction):
+    client = get_groq_client()
+    if not client:
+        return "⚠️ **Groq API Key Missing:** Streamlit Secrets mein GROQ_API_KEY configure karein!"
     try:
-        client = OpenAI(
-            api_key=active_key,
-            base_url="https://api.x.ai/v1"
-        )
         response = client.chat.completions.create(
-            model="grok-beta",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt_text}
@@ -139,7 +141,7 @@ def execute_grok_call(prompt_text, system_instruction):
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"❌ Grok Error: {str(e)}"
+        return f"❌ Groq Error: {str(e)}"
 
 # TAB 1: ADAPTIVE CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
@@ -153,34 +155,35 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
             st.markdown(user_prompt)
 
         with st.chat_message("assistant"):
-            active_key = grok_key or st.secrets.get("XAI_API_KEY", None) or os.getenv("XAI_API_KEY")
-            if not active_key:
-                ans = "⚠️ **XAI API Key Missing:** Streamlit Secrets mein `XAI_API_KEY` configure karein!"
+            client = get_groq_client()
+            if not client:
+                ans = "⚠️ **Groq API Key Missing:** Streamlit Secrets mein `GROQ_API_KEY` configure karein!"
+                st.markdown(ans)
             else:
-                try:
-                    client = OpenAI(
-                        api_key=active_key,
-                        base_url="https://api.x.ai/v1"
-                    )
-                    messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
-                    for msg in current_messages[-6:]:
-                        messages_to_send.append({"role": msg["role"], "content": msg["content"]})
-                    
-                    response = client.chat.completions.create(
-                        model="grok-beta",
-                        messages=messages_to_send
-                    )
-                    ans = response.choices[0].message.content
-                except Exception as e:
-                    ans = f"❌ Grok Error: {str(e)}"
+                def response_generator():
+                    try:
+                        messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
+                        for msg in current_messages[-6:]:
+                            messages_to_send.append({"role": msg["role"], "content": msg["content"]})
+                        
+                        completion = client.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=messages_to_send,
+                            stream=True
+                        )
+                        for chunk in completion:
+                            content = chunk.choices[0].delta.content or ""
+                            yield content
+                    except Exception as e:
+                        yield f"❌ Groq Error: {str(e)}"
 
-            st.markdown(ans)
-            current_messages.append({"role": "assistant", "content": ans})
-            save_sessions(st.session_state.all_sessions)
+                output_text = st.write_stream(response_generator())
+                current_messages.append({"role": "assistant", "content": output_text})
+                save_sessions(st.session_state.all_sessions)
 
     if len(current_messages) == 0:
         welcome_text = (
-            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Grok AI Mentor** active hai.\n\n"
+            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Groq AI Mentor** active hai.\n\n"
             f"🎯 **Target:** `{target_exam}` ({target_date_str}) | **Attempt:** `{attempt_no}`\n\n"
             f"Batao Cadet, aaj kya start karein?"
         )
@@ -199,11 +202,11 @@ elif active_tab == "📸 OCR Handwritten Answer Evaluator":
     st.subheader("📸 Optical Character Recognition (OCR) Mock Evaluation Engine")
     uploaded_file = st.file_uploader("Upload Answer Sheet (PNG/JPG):", type=["png", "jpg", "jpeg"])
     if uploaded_file is not None and st.button("Evaluate"):
-        st.info(execute_grok_call("Evaluate this answer", "You are an NDA Examiner"))
+        st.info(execute_groq_call("Evaluate this answer sheet for NDA exam standards", "You are an NDA Examiner"))
 
 # TAB 3: SSB OIR
 elif active_tab == "🎙️ SSB OIR Interactive Voice Module":
     st.subheader("🎙️ SSB OIR Voice Practice Engine")
     user_voice_input = st.text_input("Your Response:")
     if user_voice_input and st.button("Evaluate"):
-        st.success(execute_grok_call(user_voice_input, "Evaluate SSB OIR response"))
+        st.success(execute_groq_call(user_voice_input, "Evaluate SSB OIR response"))
