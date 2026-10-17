@@ -149,14 +149,14 @@ RULES:
 """
 
 def get_gemini_model():
-    """Fail-safe model loader: Tries available Gemini models automatically"""
-    candidate_models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-pro"]
+    """Updated active models list"""
+    candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"]
     for m in candidate_models:
         try:
             return genai.GenerativeModel(model_name=m)
         except Exception:
             continue
-    return genai.GenerativeModel(model_name="gemini-1.5-flash")
+    return genai.GenerativeModel(model_name="gemini-2.5-flash")
 
 def execute_llm_call(prompt_text, system_instruction):
     if "Online" in ai_engine_mode:
