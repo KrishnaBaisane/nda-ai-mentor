@@ -8,6 +8,7 @@ from groq import Groq
 
 st.set_page_config(page_title="NDA Exam Prep & Debug AI Mentor", page_icon="🎓", layout="wide")
 
+# Custom UI Styling
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
@@ -15,7 +16,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎓 NDA Exam Prep & AI Mentor (Direct Key Debug Mode)")
+st.title("🎓 NDA Exam Prep & AI Mentor (Direct Key Mode)")
 st.markdown("---")
 
 HISTORY_FILE = "nda_chat_sessions.json"
@@ -67,12 +68,28 @@ if "current_session_id" not in st.session_state:
         st.session_state.all_sessions[default_id] = {"title": "General NDA Prep", "messages": []}
         save_sessions(st.session_state.all_sessions)
 
+if "active_groq_key" not in st.session_state:
+    st.session_state.active_groq_key = ""
+
 # SIDEBAR CONTROLS
 with st.sidebar:
     st.header("🔑 Direct Key Auth")
     
-    # Direct Input for Groq API Key
-    groq_key_input = st.text_input("Enter Groq API Key:", type="password", placeholder="gsk_...", help="Paste your Groq Key directly here!")
+    # Key Input & Proceed Button
+    groq_key_input = st.text_input("Enter Groq API Key:", type="password", placeholder="gsk_...", value=st.session_state.active_groq_key, help="Paste your Groq Key here and click Proceed!")
+    
+    if st.button("🚀 Proceed & Connect Key"):
+        if groq_key_input.strip():
+            st.session_state.active_groq_key = groq_key_input.strip()
+            st.success("✅ Key Locked & Ready!")
+            st.rerun()
+        else:
+            st.error("⚠️ Pehle Key enter karein!")
+
+    if st.session_state.active_groq_key:
+        st.info("🟢 Groq Engine Connected")
+    else:
+        st.warning("🔴 Engine Disconnected (Key Needed)")
 
     st.markdown("---")
     st.header("🚀 Advanced Modules")
@@ -122,7 +139,6 @@ RULES:
 """
 
 def get_active_groq_model(client):
-    """Auto-detects working model from your Groq account"""
     preferred_models = [
         "llama-3.3-70b-versatile",
         "llama-3.1-70b-versatile",
@@ -145,8 +161,8 @@ def get_active_groq_model(client):
 # TAB 1: ADAPTIVE CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
     def execute_ai_query(user_prompt):
-        if not groq_key_input:
-            st.error("👈 Pehle Sidebar mein apni Groq API Key (`gsk_...`) paste karo!")
+        if not st.session_state.active_groq_key:
+            st.error("👈 Pehle Sidebar mein apni Groq API Key daal kar 'Proceed' button dabayein!")
             return
 
         current_messages.append({"role": "user", "content": user_prompt})
@@ -160,7 +176,7 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
         with st.chat_message("assistant"):
             def response_generator():
                 try:
-                    client = Groq(api_key=groq_key_input.strip())
+                    client = Groq(api_key=st.session_state.active_groq_key)
                     chosen_model = get_active_groq_model(client)
                     
                     messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -185,7 +201,7 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
     if len(current_messages) == 0:
         welcome_text = (
             f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Groq AI Mentor** active hai.\n\n"
-            f"👈 **Sidebar mein apni Groq Key (`gsk_...`) daalo aur query pucho.**\n\n"
+            f"👈 **Sidebar mein Key paste karke 'Proceed' button dabayein.**\n\n"
             f"🎯 **Target:** `{target_exam}` ({target_date_str}) | **Attempt:** `{attempt_no}`"
         )
         current_messages.append({"role": "assistant", "content": welcome_text})
@@ -201,11 +217,11 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
 # TAB 2: OCR EVALUATOR
 elif active_tab == "📸 OCR Handwritten Answer Evaluator":
     st.subheader("📸 OCR Answer Evaluator")
-    if not groq_key_input:
-        st.warning("👈 Sidebar mein Groq API Key paste karein!")
+    if not st.session_state.active_groq_key:
+        st.warning("👈 Sidebar mein Groq API Key daal kar Proceed karein!")
 
 # TAB 3: SSB OIR
 elif active_tab == "🎙️ SSB OIR Interactive Voice Module":
     st.subheader("🎙️ SSB OIR Voice Practice")
-    if not groq_key_input:
-        st.warning("👈 Sidebar mein Groq API Key paste karein!")
+    if not st.session_state.active_groq_key:
+        st.warning("👈 Sidebar mein Groq API Key daal kar Proceed karein!")
