@@ -156,10 +156,10 @@ def execute_llm_call(prompt_text, system_instruction):
         try:
             genai.configure(api_key=active_key)
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
-                system_instruction=system_instruction
+                model_name="gemini-1.5-flash"
             )
-            response = model.generate_content(prompt_text)
+            full_prompt = f"{system_instruction}\n\nUser Query:\n{prompt_text}"
+            response = model.generate_content(full_prompt)
             return response.text
         except Exception as e:
             return f"❌ Gemini Error: {str(e)}"
@@ -200,11 +200,13 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                     try:
                         genai.configure(api_key=active_key)
                         model = genai.GenerativeModel(
-                            model_name="gemini-1.5-flash",
-                            system_instruction=SYSTEM_PROMPT
+                            model_name="gemini-1.5-flash"
                         )
                         
                         contents = []
+                        contents.append({"role": "user", "parts": [SYSTEM_PROMPT]})
+                        contents.append({"role": "model", "parts": ["Understood. I am your ELITE UPSC NDA EXAM MENTOR."]})
+                        
                         for msg in trimmed_messages:
                             role = "user" if msg["role"] == "user" else "model"
                             contents.append({"role": role, "parts": [msg["content"]]})
