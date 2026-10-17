@@ -1,5 +1,4 @@
+openai
 streamlit
-ollama
-google-generativeai
 Pillow
 pytesseract
