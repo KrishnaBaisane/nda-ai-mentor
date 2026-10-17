@@ -1,6 +1,6 @@
 import streamlit as st
 import ollama
-from openai import OpenAI
+import google.generativeai as genai
 import json
 import os
 from datetime import datetime
@@ -75,15 +75,15 @@ with st.sidebar:
     
     ai_engine_mode = st.radio(
         "Select Model Provider:",
-        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (OpenAI GPT-4o-Mini)"],
-        index=1,  # Default set to Online Cloud API for seamless web deployment
-        help="Switch between local offline privacy mode and cloud high-speed OpenAI mode!"
+        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini 1.5 Flash)"],
+        index=1,
+        help="Switch between local offline privacy mode and Google Gemini Cloud Mode!"
     )
 
     if "Online" in ai_engine_mode:
-        openai_key = st.text_input("OpenAI API Key (Optional Override):", type="password", placeholder="sk-proj-...", help="Leave blank if API key is configured in Streamlit Secrets")
+        gemini_key = st.text_input("Gemini API Key (Optional Override):", type="password", placeholder="AIzaSy...", help="Leave blank if API key is configured in Streamlit Secrets")
     else:
-        openai_key = ""
+        gemini_key = ""
 
     st.markdown("---")
     st.header("🚀 Advanced Modules (Phase 2)")
@@ -150,22 +150,19 @@ RULES:
 
 def execute_llm_call(prompt_text, system_instruction):
     if "Online" in ai_engine_mode:
-        active_key = openai_key or st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+        active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
         if not active_key:
-            return "⚠️ **OpenAI Key Missing:** Streamlit Secrets me API Key enter karein!"
+            return "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
         try:
-            client = OpenAI(api_key=active_key)
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": prompt_text}
-                ],
-                temperature=0.3
+            genai.configure(api_key=active_key)
+            model = genai.GenerativeModel(
+                model_name="gemini-1.5-flash",
+                system_instruction=system_instruction
             )
-            return response.choices[0].message.content
+            response = model.generate_content(prompt_text)
+            return response.text
         except Exception as e:
-            return f"❌ OpenAI Error: {str(e)}"
+            return f"❌ Gemini Error: {str(e)}"
     else:
         try:
             res = ollama.chat(
@@ -196,27 +193,28 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                 trimmed_messages = current_messages[-6:] if len(current_messages) > 6 else current_messages
                 
                 if "Online" in ai_engine_mode:
-                    active_key = openai_key or st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+                    active_key = gemini_key or st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
                     if not active_key:
-                        yield "⚠️ **OpenAI Key Missing:** Streamlit Secrets me API key configure karein!"
+                        yield "⚠️ **Gemini API Key Missing:** Streamlit Secrets me GEMINI_API_KEY configure karein!"
                         return
                     try:
-                        client = OpenAI(api_key=active_key)
-                        formatted_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
-                        for msg in trimmed_messages:
-                            formatted_msgs.append({"role": msg["role"], "content": msg["content"]})
-                        
-                        response = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=formatted_msgs,
-                            temperature=0.3,
-                            stream=True
+                        genai.configure(api_key=active_key)
+                        model = genai.GenerativeModel(
+                            model_name="gemini-1.5-flash",
+                            system_instruction=SYSTEM_PROMPT
                         )
+                        
+                        contents = []
+                        for msg in trimmed_messages:
+                            role = "user" if msg["role"] == "user" else "model"
+                            contents.append({"role": role, "parts": [msg["content"]]})
+                        
+                        response = model.generate_content(contents, stream=True)
                         for chunk in response:
-                            if chunk.choices[0].delta.content:
-                                yield chunk.choices[0].delta.content
+                            if chunk.text:
+                                yield chunk.text
                     except Exception as e:
-                        yield f"❌ OpenAI Error: {str(e)}"
+                        yield f"❌ Gemini Error: {str(e)}"
                 else:
                     try:
                         stream = ollama.chat(
