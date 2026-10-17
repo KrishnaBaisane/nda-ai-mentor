@@ -90,21 +90,19 @@ def get_rotated_groq_client():
     return Groq(api_key=selected_key)
 
 def get_active_groq_model(client):
+    """Guaranteed Chat-compatible Llama models filter"""
     preferred_models = [
         "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile",
         "llama-3.1-8b-instant",
         "llama3-70b-8192",
         "llama3-8b-8192",
         "mixtral-8x7b-32768"
     ]
     try:
-        available = [m.id for m in client.models.list().data]
+        available = [m.id for m in client.models.list().data if "llama" in m.id.lower() or "mixtral" in m.id.lower()]
         for model in preferred_models:
             if model in available:
                 return model
-        if available:
-            return available[0]
     except Exception:
         pass
     return "llama-3.1-8b-instant"
@@ -113,13 +111,11 @@ def get_active_groq_model(client):
 with st.sidebar:
     st.header("⚡ AI Engine Status")
     
-    # Connection Badge
     if st.session_state.user_custom_key:
         st.success("🟢 Active: **Custom API Key Connected**")
     else:
         st.info("🟢 Active: **Default Free Shared Pool**")
 
-    # Expandable User Guide / Manual for Key Generation
     with st.expander("💡 Unlimited Access: Create Your API Key"):
         st.markdown("""
         **Kaise create karein personal API Key?**
@@ -130,7 +126,6 @@ with st.sidebar:
         """)
         st.link_button("🌐 Generate Free API Key", "https://console.groq.com/keys")
 
-    # Custom Key Input Area
     custom_key_input = st.text_input(
         "Enter Your API Key (Optional):", 
         type="password", 
