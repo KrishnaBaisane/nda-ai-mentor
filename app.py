@@ -149,14 +149,12 @@ RULES:
 """
 
 def get_gemini_model():
-    """Auto-detect working Gemini Model"""
-    try:
-        available = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        if available:
-            model_name = available[0].replace("models/", "")
+    """Fail-safe loader trying standard supported models"""
+    for model_name in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
+        try:
             return genai.GenerativeModel(model_name=model_name)
-    except Exception:
-        pass
+        except Exception:
+            continue
     return genai.GenerativeModel(model_name="gemini-1.5-flash")
 
 def execute_llm_call(prompt_text, system_instruction):
