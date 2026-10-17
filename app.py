@@ -1,23 +1,21 @@
 import streamlit as st
 import json
 import os
-import random
 from datetime import datetime
 from PIL import Image
 import pytesseract
 from groq import Groq
 
-st.set_page_config(page_title="NDA Exam Prep & Ultra-Fast AI Mentor", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="UPSC NDA AI Mentor", page_icon="🎓", layout="wide")
 
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
     .stButton>button { border-radius: 8px; font-weight: bold; width: 100%; }
-    .manual-box { background-color: #1a1c23; padding: 12px; border-radius: 8px; border-left: 4px solid #00d46a; margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎓 NDA Exam Prep & Multi-Key Groq AI Mentor")
+st.title("🎓 UPSC NDA AI Mentor")
 st.markdown("---")
 
 HISTORY_FILE = "nda_chat_sessions.json"
@@ -72,25 +70,8 @@ if "current_session_id" not in st.session_state:
 if "user_custom_key" not in st.session_state:
     st.session_state.user_custom_key = ""
 
-def get_rotated_groq_client():
-    """Selects User Custom Key if provided, otherwise picks from Server Pool"""
-    if st.session_state.user_custom_key.strip():
-        return Groq(api_key=st.session_state.user_custom_key.strip())
-    
-    keys_pool = st.secrets.get("GROQ_API_KEYS", [])
-    if not keys_pool:
-        single_key = st.secrets.get("GROQ_API_KEY", None) or os.getenv("GROQ_API_KEY")
-        if single_key:
-            keys_pool = [single_key]
-            
-    if not keys_pool:
-        return None
-    
-    selected_key = random.choice(keys_pool)
-    return Groq(api_key=selected_key)
-
 def get_active_groq_model(client):
-    """Guaranteed Groq Production Chat Models"""
+    """Guaranteed Groq Production Chat Model"""
     preferred_models = [
         "llama-3.3-70b-versatile",
         "llama3-70b-8192",
@@ -108,45 +89,45 @@ def get_active_groq_model(client):
 
 # SIDEBAR CONTROLS
 with st.sidebar:
-    st.header("⚡ AI Engine Status")
+    st.header("🔑 Groq API Setup")
     
-    if st.session_state.user_custom_key:
-        st.success("🟢 Active: **Custom API Key Connected**")
-    else:
-        st.info("🟢 Active: **Default Free Shared Pool**")
-
-    with st.expander("💡 Unlimited Access: Create Your API Key"):
+    # User Manual Box
+    with st.expander("📖 Free API Key Kaise Banayein? (Click Here)", expanded=not bool(st.session_state.user_custom_key)):
         st.markdown("""
-        **Kaise create karein personal API Key?**
-        1. Click: **'Generate Free API Key'** button.
-        2. Select **'Continue with Google'** to log in.
-        3. Click **'Create API Key'** & Copy the string (`gsk_...`).
-        4. Paste key below & click **'Apply Key'**!
+        **Simple 3-Step Guide:**
+        1. Niche **'🌐 Generate Free API Key'** button par click karein.
+        2. **'Continue with Google'** se Sign-In karein.
+        3. **'Create API Key'** dabakar string (`gsk_...`) copy karein, yahan paste karke **Proceed** karein!
         """)
         st.link_button("🌐 Generate Free API Key", "https://console.groq.com/keys")
 
     custom_key_input = st.text_input(
-        "Enter Your API Key (Optional):", 
+        "Enter Groq API Key:", 
         type="password", 
         placeholder="gsk_...", 
         value=st.session_state.user_custom_key,
-        help="Custom key enters unlimited private session mode!"
+        help="Paste your free Groq API key to activate the chatbot."
     )
     
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("🚀 Apply Key"):
+        if st.button("🚀 Proceed & Connect"):
             if custom_key_input.strip():
                 st.session_state.user_custom_key = custom_key_input.strip()
-                st.toast("✅ Custom API Key Activated!", icon="🔑")
+                st.toast("✅ Key Locked & Ready!", icon="🔑")
                 st.rerun()
             else:
-                st.warning("Pehle key enter karein!")
+                st.error("Pehle API key paste karein!")
     with col_b:
-        if st.button("🔄 Reset"):
+        if st.button("🔄 Disconnect"):
             st.session_state.user_custom_key = ""
-            st.toast("Switched back to Shared Pool!", icon="🔄")
+            st.toast("Key Cleared!", icon="🧹")
             st.rerun()
+
+    if st.session_state.user_custom_key:
+        st.success("🟢 AI Mentor Connected")
+    else:
+        st.warning("🔴 Key Required to Chat")
 
     st.markdown("---")
     st.header("🚀 Advanced Modules")
@@ -196,10 +177,10 @@ RULES:
 """
 
 def execute_groq_call(prompt_text, system_instruction):
-    client = get_rotated_groq_client()
-    if not client:
-        return "⚠️ **Groq API Key Missing:** Streamlit Secrets mein `GROQ_API_KEYS` list configure karein!"
+    if not st.session_state.user_custom_key.strip():
+        return "⚠️ **API Key Missing:** Sidebar mein apni Groq API Key daal kar 'Proceed & Connect' dabaayein!"
     try:
+        client = Groq(api_key=st.session_state.user_custom_key.strip())
         chosen_model = get_active_groq_model(client)
         response = client.chat.completions.create(
             model=chosen_model,
@@ -215,6 +196,10 @@ def execute_groq_call(prompt_text, system_instruction):
 # TAB 1: ADAPTIVE CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
     def execute_ai_query(user_prompt):
+        if not st.session_state.user_custom_key.strip():
+            st.error("👈 Pehle Sidebar mein Groq API Key daal kar 'Proceed & Connect' button dabayein!")
+            return
+
         current_messages.append({"role": "user", "content": user_prompt})
         
         if len(current_messages) == 1:
@@ -224,36 +209,33 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
             st.markdown(user_prompt)
 
         with st.chat_message("assistant"):
-            client = get_rotated_groq_client()
-            if not client:
-                ans = "⚠️ **Groq API Key Missing:** Streamlit Secrets mein `GROQ_API_KEYS` configure karein!"
-                st.markdown(ans)
-            else:
-                def response_generator():
-                    try:
-                        chosen_model = get_active_groq_model(client)
-                        messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
-                        for msg in current_messages[-6:]:
-                            messages_to_send.append({"role": msg["role"], "content": msg["content"]})
-                        
-                        completion = client.chat.completions.create(
-                            model=chosen_model,
-                            messages=messages_to_send,
-                            stream=True
-                        )
-                        for chunk in completion:
-                            content = chunk.choices[0].delta.content or ""
-                            yield content
-                    except Exception as e:
-                        yield f"❌ Groq Error: {str(e)}"
+            def response_generator():
+                try:
+                    client = Groq(api_key=st.session_state.user_custom_key.strip())
+                    chosen_model = get_active_groq_model(client)
+                    messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
+                    for msg in current_messages[-6:]:
+                        messages_to_send.append({"role": msg["role"], "content": msg["content"]})
+                    
+                    completion = client.chat.completions.create(
+                        model=chosen_model,
+                        messages=messages_to_send,
+                        stream=True
+                    )
+                    for chunk in completion:
+                        content = chunk.choices[0].delta.content or ""
+                        yield content
+                except Exception as e:
+                    yield f"❌ Groq Error: {str(e)}"
 
-                output_text = st.write_stream(response_generator())
-                current_messages.append({"role": "assistant", "content": output_text})
-                save_sessions(st.session_state.all_sessions)
+            output_text = st.write_stream(response_generator())
+            current_messages.append({"role": "assistant", "content": output_text})
+            save_sessions(st.session_state.all_sessions)
 
     if len(current_messages) == 0:
         welcome_text = (
-            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Groq AI Mentor** active hai.\n\n"
+            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA AI Mentor** active hai.\n\n"
+            f"👈 **Sidebar se Apni Free Groq API Key daal kar Proceed karein.**\n\n"
             f"🎯 **Target:** `{target_exam}` ({target_date_str}) | **Attempt:** `{attempt_no}`"
         )
         current_messages.append({"role": "assistant", "content": welcome_text})
