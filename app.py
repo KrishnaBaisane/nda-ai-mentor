@@ -75,7 +75,7 @@ with st.sidebar:
     
     ai_engine_mode = st.radio(
         "Select Model Provider:",
-        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini 1.5 Flash)"],
+        ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (Google Gemini)"],
         index=1,
         help="Switch between local offline privacy mode and Google Gemini Cloud Mode!"
     )
@@ -156,7 +156,7 @@ def execute_llm_call(prompt_text, system_instruction):
         try:
             genai.configure(api_key=active_key)
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash"
+                model_name="gemini-1.5-flash-latest"
             )
             full_prompt = f"{system_instruction}\n\nUser Query:\n{prompt_text}"
             response = model.generate_content(full_prompt)
@@ -200,7 +200,7 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                     try:
                         genai.configure(api_key=active_key)
                         model = genai.GenerativeModel(
-                            model_name="gemini-1.5-flash"
+                            model_name="gemini-1.5-flash-latest"
                         )
                         
                         contents = []
