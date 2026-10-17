@@ -76,11 +76,12 @@ with st.sidebar:
     ai_engine_mode = st.radio(
         "Select Model Provider:",
         ["🟢 Offline (Local RTX 3050 GPU - Llama 3.2)", "🌐 Online Cloud API (OpenAI GPT-4o-Mini)"],
+        index=1,  # Default set to Online Cloud API for seamless web deployment
         help="Switch between local offline privacy mode and cloud high-speed OpenAI mode!"
     )
 
     if "Online" in ai_engine_mode:
-        openai_key = st.text_input("OpenAI API Key:", type="password", placeholder="sk-proj-...", help="Enter OpenAI API key for Cloud mode")
+        openai_key = st.text_input("OpenAI API Key (Optional Override):", type="password", placeholder="sk-proj-...", help="Leave blank if API key is configured in Streamlit Secrets")
     else:
         openai_key = ""
 
@@ -149,10 +150,11 @@ RULES:
 
 def execute_llm_call(prompt_text, system_instruction):
     if "Online" in ai_engine_mode:
-        if not openai_key:
-            return "⚠️ **OpenAI Key Missing:** Sidebar me API Key enter karein ya Offline Mode switch karein!"
+        active_key = openai_key or st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+        if not active_key:
+            return "⚠️ **OpenAI Key Missing:** Streamlit Secrets me API Key enter karein!"
         try:
-            client = OpenAI(api_key=openai_key)
+            client = OpenAI(api_key=active_key)
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -165,15 +167,18 @@ def execute_llm_call(prompt_text, system_instruction):
         except Exception as e:
             return f"❌ OpenAI Error: {str(e)}"
     else:
-        res = ollama.chat(
-            model='llama3.2:3b',
-            messages=[
-                {'role': 'system', 'content': system_instruction},
-                {'role': 'user', 'content': prompt_text}
-            ],
-            options={"num_predict": 512, "temperature": 0.3, "num_ctx": 2048}
-        )
-        return res['message']['content']
+        try:
+            res = ollama.chat(
+                model='llama3.2:3b',
+                messages=[
+                    {'role': 'system', 'content': system_instruction},
+                    {'role': 'user', 'content': prompt_text}
+                ],
+                options={"num_predict": 512, "temperature": 0.3, "num_ctx": 2048}
+            )
+            return res['message']['content']
+        except Exception as e:
+            return f"❌ Local Ollama Error: Web deployment par Online Cloud API select karein! ({str(e)})"
 
 # TAB 1: ADAPTIVE CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
@@ -191,11 +196,12 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                 trimmed_messages = current_messages[-6:] if len(current_messages) > 6 else current_messages
                 
                 if "Online" in ai_engine_mode:
-                    if not openai_key:
-                        yield "⚠️ **OpenAI Key Missing:** Sidebar me OpenAI API key enter karein!"
+                    active_key = openai_key or st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+                    if not active_key:
+                        yield "⚠️ **OpenAI Key Missing:** Streamlit Secrets me API key configure karein!"
                         return
                     try:
-                        client = OpenAI(api_key=openai_key)
+                        client = OpenAI(api_key=active_key)
                         formatted_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
                         for msg in trimmed_messages:
                             formatted_msgs.append({"role": msg["role"], "content": msg["content"]})
@@ -212,17 +218,21 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                     except Exception as e:
                         yield f"❌ OpenAI Error: {str(e)}"
                 else:
-                    stream = ollama.chat(
-                        model='llama3.2:3b',
-                        messages=[
-                            {'role': 'system', 'content': SYSTEM_PROMPT},
-                            *trimmed_messages
-                        ],
-                        stream=True,
-                        options={"num_predict": 512, "temperature": 0.3, "num_ctx": 2048}
-                    )
-                    for chunk in stream:
-                        yield chunk['message']['content']
+                    try:
+                        stream = ollama.chat(
+                            model='llama3.2:3b',
+                            messages=[
+                                {'role': 'system', 'content': SYSTEM_PROMPT},
+                                *trimmed_messages
+                            ],
+                            stream=True,
+                            options={"num_predict": 512, "temperature": 0.3, "num_ctx": 2048}
+                        )
+                        for chunk in stream:
+                            if chunk.get('message', {}).get('content'):
+                                yield chunk['message']['content']
+                    except Exception as e:
+                        yield f"❌ Local Ollama Error: Cloud link par Local Engine mat chalao! Mode badal kar 'Online Cloud API' select karo. ({str(e)})"
 
             output_text = st.write_stream(response_generator)
             current_messages.append({"role": "assistant", "content": output_text})
