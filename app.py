@@ -69,10 +69,10 @@ if "current_session_id" not in st.session_state:
 
 # SIDEBAR CONTROLS
 with st.sidebar:
-    st.header("⚡ AI Engine Selection")
-    st.info("🌐 Active Engine: **Groq Cloud (Llama 3.3 70B)**")
+    st.header("⚡ AI Engine")
+    st.success("🌐 Active: **Groq Cloud (Llama 3.3 70B)**")
 
-    groq_key_input = st.text_input("Groq API Key (Optional Override):", type="password", placeholder="gsk_...", help="Leave blank if API key is configured in Streamlit Secrets")
+    groq_key_input = st.text_input("Groq API Key (Optional Override):", type="password", placeholder="gsk_...", help="Leave blank if API key is in Streamlit Secrets")
 
     st.markdown("---")
     st.header("🚀 Advanced Modules")
@@ -130,7 +130,7 @@ def get_groq_client():
 def execute_groq_call(prompt_text, system_instruction):
     client = get_groq_client()
     if not client:
-        return "⚠️ **Groq API Key Missing:** Streamlit Secrets mein GROQ_API_KEY configure karein!"
+        return "⚠️ **Groq API Key Missing:** Streamlit Secrets mein `GROQ_API_KEY` configure karein!"
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
