@@ -149,14 +149,16 @@ RULES:
 """
 
 def get_gemini_model():
-    """Updated active models list"""
-    candidate_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"]
-    for m in candidate_models:
-        try:
-            return genai.GenerativeModel(model_name=m)
-        except Exception:
-            continue
-    return genai.GenerativeModel(model_name="gemini-2.5-flash")
+    """Auto-detect working Gemini Model"""
+    try:
+        available = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        if available:
+            # Clean model name string
+            model_name = available[0].replace("models/", "")
+            return genai.GenerativeModel(model_name=model_name)
+    except Exception:
+        pass
+    return genai.GenerativeModel(model_name="gemini-1.5-flash")
 
 def execute_llm_call(prompt_text, system_instruction):
     if "Online" in ai_engine_mode:
