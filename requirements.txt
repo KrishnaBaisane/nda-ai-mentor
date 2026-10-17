@@ -1,4 +1,4 @@
-openai
 streamlit
+groq
 Pillow
 pytesseract
