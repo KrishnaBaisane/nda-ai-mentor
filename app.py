@@ -70,9 +70,6 @@ if "current_session_id" not in st.session_state:
 if "user_custom_key" not in st.session_state:
     st.session_state.user_custom_key = ""
 
-# Locked Production Groq Model (Prevents 404/Invalid Model Errors)
-MODEL_NAME = "llama-3.3-70b-versatile"
-
 # SIDEBAR CONTROLS
 with st.sidebar:
     st.header("🔑 Groq API Setup")
@@ -92,6 +89,12 @@ with st.sidebar:
         placeholder="gsk_...", 
         value=st.session_state.user_custom_key,
         help="Paste your free Groq API key to activate the chatbot."
+    )
+    
+    selected_model = st.selectbox(
+        "🤖 Primary AI Engine Model:",
+        options=["llama-3.3-70b-versatile", "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"],
+        index=0
     )
     
     col_a, col_b = st.columns(2)
@@ -152,52 +155,49 @@ with st.sidebar:
 active_id = st.session_state.current_session_id
 current_messages = st.session_state.all_sessions[active_id]["messages"]
 
-# FULL OFFICIAL UPSC NDA SYLLABUS SYSTEM PROMPT
 SYSTEM_PROMPT = f"""
 You are an ELITE UPSC NDA EXAM MENTOR powered by Groq.
 CONTEXT: Cadet Name: {user_name} | Attempt: {attempt_no} | Target Exam: {target_exam} ({auto_days_left} Days Left).
 
 COMPLETE OFFICIAL UPSC NDA SYLLABUS MAPPED:
-1. PAPER I - MATHEMATICS (300 Marks / 120 Qs | -0.83 Negative Marking):
-   - Algebra: Sets, Relations, Functions, Complex Numbers, Binary System, AP/GP/HP, Quadratic Equations, Permutations & Combinations, Binomial Theorem, Logarithms.
-   - Matrices & Determinants: Types, Operations, Adjoint, Inverse, Cramer's Rule, Solving Linear Equations.
-   - Trigonometry: Ratios, Identities, Inverse Functions, Heights & Distances, Properties of Triangles.
-   - Analytical Geometry (2D & 3D): Cartesian Coordinates, Lines, Circles, Conic Sections (Parabola, Ellipse, Hyperbola), 3D Planes, Lines, Direction Cosines/Ratios.
-   - Differential Calculus: Limits, Continuity, Derivatives, Maxima & Minima, Tangents & Normals.
-   - Integral Calculus & Differential Equations: Indefinite/Definite Integrals, Area under curves, 1st order/1st degree DEs.
-   - Vector Algebra: 2D/3D Vectors, Dot/Cross Product, Geometric Applications.
-   - Statistics & Probability: Mean/Median/Mode, Standard Deviation, Variance, Correlation/Regression, Probability Laws, Conditional Probability.
-
-2. PAPER II - GENERAL ABILITY TEST / GAT (600 Marks / 150 Qs | -1.33 Negative Marking):
-   - Part A: English (200 Marks / 50 Qs) -> Grammar, Spotting Errors, Synonyms/Antonyms, Idioms/Phrases, Sentence Improvement, Para Jumbles, Comprehension, Cloze Test.
-   - Part B: General Knowledge (400 Marks / 100 Qs):
-     * Physics: Motion, Newton's Laws, Work/Power/Energy, Archimedes Principle, Sound, Optics, Heat, Electricity (Ohm's Law), Magnetism.
-     * Chemistry: Physical/Chemical changes, Elements/Compounds, Acids/Bases/Salts, Carbon, Air/Water properties, Household items (Glass, Ink, Soap).
-     * General Science (Biology & Environment): Human Anatomy, Nutrition, Food/Diseases, Ecology, Environmental Science.
-     * History & Freedom Movement: Ancient/Medieval culture, Freedom Movement, Indian Constitution, Panchayati Raj, Gandhian Philosophy, World History milestones.
-     * Geography: Earth physical features, Rocks, Atmosphere, Ocean Currents, Climate/Vegetation of India, Natural Resources.
-     * Current Affairs: Defence exercises, Schemes, Personalities, International & National Events.
-
-3. STAGE II - SSB INTERVIEW (900 Marks):
-   - OIR (Officer Intelligence Rating), PPDT (Picture Perception & Discussion Test), Psychology Tests, GTO Tasks, Personal Interview.
+1. PAPER I - MATHEMATICS (300 Marks / 120 Qs | -0.83 Negative): Algebra, Matrices/Determinants, Trigonometry, Analytical Geometry (2D & 3D), Differential Calculus, Integral Calculus & DEs, Vector Algebra, Statistics & Probability.
+2. PAPER II - GAT (600 Marks / 150 Qs | -1.33 Negative):
+   - Part A: English (200 Marks) -> Grammar, Spotting Errors, Vocabulary, Synonyms/Antonyms, Idioms, Comprehension.
+   - Part B: General Knowledge (400 Marks) -> Physics, Chemistry, General Science/Biology, History & Freedom Movement, Geography, Current Affairs.
+3. STAGE II - SSB INTERVIEW (900 Marks): OIR, PPDT, Psychology, GTO, Personal Interview.
 
 INSTRUCTIONS:
-- Directly answer any topic or question asked from the above NDA syllabus with extreme accuracy, structured breakdown, key formulas, PYQ insights, and strategy.
-- Maintain a highly motivating Defense Officer Mentor tone ("Jai Hind Cadet", "Stay Focused").
+- Directly answer any topic asked from the NDA syllabus with structured breakdown, key formulas, PYQ insights, and strategy.
+- Maintain a Defense Officer Mentor tone ("Jai Hind Cadet").
 """
+
+def execute_groq_call_with_fallback(client, messages_to_send, stream=True):
+    models_to_try = [selected_model, "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "llama-3.3-70b-versatile"]
+    models_to_try = list(dict.fromkeys(models_to_try))
+    
+    last_exception = None
+    for m in models_to_try:
+        try:
+            return client.chat.completions.create(
+                model=m,
+                messages=messages_to_send,
+                stream=stream
+            )
+        except Exception as e:
+            last_exception = e
+            continue
+    raise last_exception
 
 def execute_groq_call(prompt_text, system_instruction):
     if not st.session_state.user_custom_key.strip():
         return "⚠️ **API Key Missing:** Sidebar mein apni Groq API Key daal kar 'Proceed & Connect' dabaayein!"
     try:
         client = Groq(api_key=st.session_state.user_custom_key.strip())
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": prompt_text}
-            ]
-        )
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": prompt_text}
+        ]
+        response = execute_groq_call_with_fallback(client, messages, stream=False)
         return response.choices[0].message.content
     except Exception as e:
         return f"❌ Groq Error: {str(e)}"
@@ -225,11 +225,7 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                     messages_to_send.append({"role": msg["role"], "content": msg["content"]})
 
                 try:
-                    completion = client.chat.completions.create(
-                        model=MODEL_NAME,
-                        messages=messages_to_send,
-                        stream=True
-                    )
+                    completion = execute_groq_call_with_fallback(client, messages_to_send, stream=True)
                     for chunk in completion:
                         content = chunk.choices[0].delta.content or ""
                         yield content
