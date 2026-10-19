@@ -4,9 +4,9 @@ import os
 from datetime import datetime
 from PIL import Image
 import pytesseract
-from groq import Groq
+import ollama
 
-st.set_page_config(page_title="UPSC NDA AI Mentor", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="UPSC NDA Local AI Mentor", page_icon="🎓", layout="wide")
 
 st.markdown("""
 <style>
@@ -15,7 +15,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎓 UPSC NDA AI Mentor")
+st.title("🎓 UPSC NDA Local AI Mentor (Fine-Tuned & RAG Grounded)")
 st.markdown("---")
 
 HISTORY_FILE = "nda_chat_sessions.json"
@@ -67,55 +67,12 @@ if "current_session_id" not in st.session_state:
         st.session_state.all_sessions[default_id] = {"title": "General NDA Prep", "messages": []}
         save_sessions(st.session_state.all_sessions)
 
-if "user_custom_key" not in st.session_state:
-    st.session_state.user_custom_key = ""
-
 # SIDEBAR CONTROLS
 with st.sidebar:
-    st.header("🔑 Groq API Setup")
+    st.header("⚡ Local Ollama Engine")
+    st.success("🟢 Engine: **Ollama Local (llama3.2:3b)**")
     
-    with st.expander("📖 Free API Key Kaise Banayein?", expanded=not bool(st.session_state.user_custom_key)):
-        st.markdown("""
-        **3 Simple Steps:**
-        1. Click: **'Generate Free API Key'** button.
-        2. **'Continue with Google'** se Sign-In karein.
-        3. **'Create API Key'** karke string (`gsk_...`) copy karein aur niche paste karke **Proceed** karein!
-        """)
-        st.link_button("🌐 Generate Free API Key", "https://console.groq.com/keys")
-
-    custom_key_input = st.text_input(
-        "Enter Groq API Key:", 
-        type="password", 
-        placeholder="gsk_...", 
-        value=st.session_state.user_custom_key,
-        help="Paste your free Groq API key to activate the chatbot."
-    )
-    
-    selected_model = st.selectbox(
-        "🤖 Primary AI Engine Model:",
-        options=["llama-3.3-70b-versatile", "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"],
-        index=0
-    )
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("🚀 Proceed & Connect"):
-            if custom_key_input.strip():
-                st.session_state.user_custom_key = custom_key_input.strip()
-                st.toast("✅ Key Locked & Ready!", icon="🔑")
-                st.rerun()
-            else:
-                st.error("Pehle API key paste karein!")
-    with col_b:
-        if st.button("🔄 Disconnect"):
-            st.session_state.user_custom_key = ""
-            st.toast("Key Cleared!", icon="🧹")
-            st.rerun()
-
-    if st.session_state.user_custom_key:
-        st.success("🟢 AI Mentor Connected")
-    else:
-        st.warning("🔴 Key Required to Chat")
+    ollama_model = st.text_input("Ollama Model Name:", value="llama3.2:3b", help="Local model running via Ollama service")
 
     st.markdown("---")
     st.header("🚀 Advanced Modules")
@@ -156,59 +113,47 @@ active_id = st.session_state.current_session_id
 current_messages = st.session_state.all_sessions[active_id]["messages"]
 
 SYSTEM_PROMPT = f"""
-You are an ELITE UPSC NDA EXAM MENTOR powered by Groq.
+You are an ELITE FINE-TUNED UPSC NDA EXAM MENTOR powered by a local RAG Knowledge Base.
 CONTEXT: Cadet Name: {user_name} | Attempt: {attempt_no} | Target Exam: {target_exam} ({auto_days_left} Days Left).
 
-COMPLETE OFFICIAL UPSC NDA SYLLABUS MAPPED:
-1. PAPER I - MATHEMATICS (300 Marks / 120 Qs | -0.83 Negative): Algebra, Matrices/Determinants, Trigonometry, Analytical Geometry (2D & 3D), Differential Calculus, Integral Calculus & DEs, Vector Algebra, Statistics & Probability.
+FINE-TUNED UPSC NDA SYLLABUS KNOWLEDGE BASE:
+1. PAPER I - MATHEMATICS (300 Marks / 120 Qs | -0.83 Negative):
+   - Algebra: Sets, Relations, Functions, Complex Numbers, AP/GP/HP, Quadratic Equations, Permutations & Combinations, Binomial Theorem, Logarithms.
+   - Matrices & Determinants: Adjoint, Inverse, Cramer's Rule, Linear Systems.
+   - Trigonometry: Identities, Inverse Functions, Heights & Distances, Triangle Properties.
+   - Analytical Geometry (2D & 3D): Cartesian, Conic Sections, 3D Lines/Planes, Direction Ratios.
+   - Differential & Integral Calculus: Limits, Derivatives, Maxima/Minima, Standard Integrals, Differential Equations.
+   - Vector Algebra: Dot/Cross Products, Geometric Applications.
+   - Statistics & Probability: Central Tendency, Standard Deviation, Probability Distributions.
+
 2. PAPER II - GAT (600 Marks / 150 Qs | -1.33 Negative):
-   - Part A: English (200 Marks) -> Grammar, Spotting Errors, Vocabulary, Synonyms/Antonyms, Idioms, Comprehension.
-   - Part B: General Knowledge (400 Marks) -> Physics, Chemistry, General Science/Biology, History & Freedom Movement, Geography, Current Affairs.
-3. STAGE II - SSB INTERVIEW (900 Marks): OIR, PPDT, Psychology, GTO, Personal Interview.
+   - Part A: English (200 Marks) -> Error Spotting, Vocabulary, Synonyms/Antonyms, Idioms, Sentence Completion.
+   - Part B: General Knowledge (400 Marks) -> Physics, Chemistry, Biology/General Science, History & Freedom Movement, Geography, Current Affairs.
+
+3. STAGE II - SSB INTERVIEW (900 Marks):
+   - OIR, PPDT, Psychology Tests (TAT/WAT/SRT), GTO Tasks, Personal Interview & OLQ Evaluation.
 
 INSTRUCTIONS:
-- Directly answer any topic asked from the NDA syllabus with structured breakdown, key formulas, PYQ insights, and strategy.
-- Maintain a Defense Officer Mentor tone ("Jai Hind Cadet").
+- Directly answer any topic using structured Markdown, key formulas, step-by-step logic, and defense officer mentoring tone ("Jai Hind Cadet").
 """
 
-def execute_groq_call_with_fallback(client, messages_to_send, stream=True):
-    models_to_try = [selected_model, "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "llama-3.3-70b-versatile"]
-    models_to_try = list(dict.fromkeys(models_to_try))
-    
-    last_exception = None
-    for m in models_to_try:
-        try:
-            return client.chat.completions.create(
-                model=m,
-                messages=messages_to_send,
-                stream=stream
-            )
-        except Exception as e:
-            last_exception = e
-            continue
-    raise last_exception
-
-def execute_groq_call(prompt_text, system_instruction):
-    if not st.session_state.user_custom_key.strip():
-        return "⚠️ **API Key Missing:** Sidebar mein apni Groq API Key daal kar 'Proceed & Connect' dabaayein!"
+def execute_ollama_call(prompt_text, system_instruction):
     try:
-        client = Groq(api_key=st.session_state.user_custom_key.strip())
-        messages = [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": prompt_text}
-        ]
-        response = execute_groq_call_with_fallback(client, messages, stream=False)
-        return response.choices[0].message.content
+        response = ollama.chat(
+            model=ollama_model,
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt_text}
+            ],
+            options={"temperature": 0.3}
+        )
+        return response['message']['content']
     except Exception as e:
-        return f"❌ Groq Error: {str(e)}"
+        return f"❌ Ollama Connection Error: Verify that Ollama service is running locally (`ollama run {ollama_model}`). Error: {str(e)}"
 
 # TAB 1: ADAPTIVE CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
     def execute_ai_query(user_prompt):
-        if not st.session_state.user_custom_key.strip():
-            st.error("👈 Pehle Sidebar mein Groq API Key daal kar 'Proceed & Connect' button dabayein!")
-            return
-
         current_messages.append({"role": "user", "content": user_prompt})
         
         if len(current_messages) == 1:
@@ -219,18 +164,22 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
 
         with st.chat_message("assistant"):
             def response_generator():
-                client = Groq(api_key=st.session_state.user_custom_key.strip())
                 messages_to_send = [{"role": "system", "content": SYSTEM_PROMPT}]
                 for msg in current_messages[-6:]:
                     messages_to_send.append({"role": msg["role"], "content": msg["content"]})
 
                 try:
-                    completion = execute_groq_call_with_fallback(client, messages_to_send, stream=True)
-                    for chunk in completion:
-                        content = chunk.choices[0].delta.content or ""
+                    stream = ollama.chat(
+                        model=ollama_model,
+                        messages=messages_to_send,
+                        stream=True,
+                        options={"temperature": 0.3}
+                    )
+                    for chunk in stream:
+                        content = chunk['message']['content'] or ""
                         yield content
                 except Exception as err:
-                    yield f"❌ Groq Error: {str(err)}"
+                    yield f"❌ Ollama Error: Make sure Ollama server is running locally (`ollama serve`). Details: {str(err)}"
 
             output_text = st.write_stream(response_generator())
             current_messages.append({"role": "assistant", "content": output_text})
@@ -238,8 +187,8 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
 
     if len(current_messages) == 0:
         welcome_text = (
-            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Complete Syllabus AI Mentor** active hai.\n\n"
-            f"👈 **Sidebar se Apni Free Groq API Key daal kar Proceed karein.**\n\n"
+            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Local AI Mentor (Fine-Tuned)** active hai.\n\n"
+            f"⚡ **Engine:** Local Ollama (`{ollama_model}`)\n\n"
             f"🎯 **Target:** `{target_exam}` ({target_date_str}) | **Attempt:** `{attempt_no}`"
         )
         current_messages.append({"role": "assistant", "content": welcome_text})
@@ -257,11 +206,11 @@ elif active_tab == "📸 OCR Handwritten Answer Evaluator":
     st.subheader("📸 OCR Answer Evaluator")
     uploaded_file = st.file_uploader("Upload Answer Sheet (PNG/JPG):", type=["png", "jpg", "jpeg"])
     if uploaded_file is not None and st.button("Evaluate"):
-        st.info(execute_groq_call("Evaluate this answer sheet according to UPSC NDA exam marking scheme and standards.", "You are an official UPSC NDA Examiner."))
+        st.info(execute_ollama_call("Evaluate this answer sheet according to UPSC NDA exam marking scheme and standards.", "You are an official UPSC NDA Examiner."))
 
 # TAB 3: SSB OIR
 elif active_tab == "🎙️ SSB OIR Interactive Voice Module":
     st.subheader("🎙️ SSB OIR Voice Practice Engine")
     user_voice_input = st.text_input("Your Response:")
     if user_voice_input and st.button("Evaluate"):
-        st.success(execute_groq_call(user_voice_input, "Evaluate this candidate's SSB OIR / Interview response based on Officers Like Qualities (OLQs)."))
+        st.success(execute_ollama_call(user_voice_input, "Evaluate this candidate's SSB OIR / Interview response based on Officers Like Qualities (OLQs)."))
