@@ -15,7 +15,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎓 UPSC NDA Local AI Mentor (Fine-Tuned & RAG Grounded)")
+st.title("🎓 UPSC NDA Local AI Mentor")
 st.markdown("---")
 
 HISTORY_FILE = "nda_chat_sessions.json"
@@ -69,10 +69,15 @@ if "current_session_id" not in st.session_state:
 
 # SIDEBAR CONTROLS
 with st.sidebar:
-    st.header("⚡ Local Ollama Engine")
-    st.success("🟢 Engine: **Ollama Local (llama3.2:3b)**")
+    st.header("⚡ Ollama Server Settings")
     
-    ollama_model = st.text_input("Ollama Model Name:", value="llama3.2:3b", help="Local model running via Ollama service")
+    ollama_host = st.text_input(
+        "Ollama Endpoint / Tunnel URL:", 
+        value="http://localhost:11434",
+        help="Local testing ke liye 'http://localhost:11434' aur Streamlit Cloud ke liye ngrok URL ('https://xxxx.ngrok-free.app') daalein."
+    )
+    
+    ollama_model = st.text_input("Ollama Model Name:", value="llama3.2:3b")
 
     st.markdown("---")
     st.header("🚀 Advanced Modules")
@@ -118,28 +123,24 @@ CONTEXT: Cadet Name: {user_name} | Attempt: {attempt_no} | Target Exam: {target_
 
 FINE-TUNED UPSC NDA SYLLABUS KNOWLEDGE BASE:
 1. PAPER I - MATHEMATICS (300 Marks / 120 Qs | -0.83 Negative):
-   - Algebra: Sets, Relations, Functions, Complex Numbers, AP/GP/HP, Quadratic Equations, Permutations & Combinations, Binomial Theorem, Logarithms.
-   - Matrices & Determinants: Adjoint, Inverse, Cramer's Rule, Linear Systems.
-   - Trigonometry: Identities, Inverse Functions, Heights & Distances, Triangle Properties.
-   - Analytical Geometry (2D & 3D): Cartesian, Conic Sections, 3D Lines/Planes, Direction Ratios.
-   - Differential & Integral Calculus: Limits, Derivatives, Maxima/Minima, Standard Integrals, Differential Equations.
-   - Vector Algebra: Dot/Cross Products, Geometric Applications.
-   - Statistics & Probability: Central Tendency, Standard Deviation, Probability Distributions.
-
+   - Algebra, Matrices & Determinants, Trigonometry, Analytical Geometry (2D & 3D), Calculus, Vector Algebra, Statistics & Probability.
 2. PAPER II - GAT (600 Marks / 150 Qs | -1.33 Negative):
-   - Part A: English (200 Marks) -> Error Spotting, Vocabulary, Synonyms/Antonyms, Idioms, Sentence Completion.
+   - Part A: English (200 Marks) -> Error Spotting, Vocabulary, Synonyms/Antonyms, Idioms.
    - Part B: General Knowledge (400 Marks) -> Physics, Chemistry, Biology/General Science, History & Freedom Movement, Geography, Current Affairs.
-
 3. STAGE II - SSB INTERVIEW (900 Marks):
-   - OIR, PPDT, Psychology Tests (TAT/WAT/SRT), GTO Tasks, Personal Interview & OLQ Evaluation.
+   - OIR, PPDT, Psychology Tests, GTO Tasks, Personal Interview & OLQ Evaluation.
 
 INSTRUCTIONS:
 - Directly answer any topic using structured Markdown, key formulas, step-by-step logic, and defense officer mentoring tone ("Jai Hind Cadet").
 """
 
+def get_ollama_client():
+    return ollama.Client(host=ollama_host.strip())
+
 def execute_ollama_call(prompt_text, system_instruction):
     try:
-        response = ollama.chat(
+        client = get_ollama_client()
+        response = client.chat(
             model=ollama_model,
             messages=[
                 {"role": "system", "content": system_instruction},
@@ -149,7 +150,7 @@ def execute_ollama_call(prompt_text, system_instruction):
         )
         return response['message']['content']
     except Exception as e:
-        return f"❌ Ollama Connection Error: Verify that Ollama service is running locally (`ollama run {ollama_model}`). Error: {str(e)}"
+        return f"❌ Ollama Connection Error: {str(e)}"
 
 # TAB 1: ADAPTIVE CHAT MENTOR
 if active_tab == "💬 Adaptive AI Chat Mentor":
@@ -169,7 +170,8 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                     messages_to_send.append({"role": msg["role"], "content": msg["content"]})
 
                 try:
-                    stream = ollama.chat(
+                    client = get_ollama_client()
+                    stream = client.chat(
                         model=ollama_model,
                         messages=messages_to_send,
                         stream=True,
@@ -179,7 +181,7 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
                         content = chunk['message']['content'] or ""
                         yield content
                 except Exception as err:
-                    yield f"❌ Ollama Error: Make sure Ollama server is running locally (`ollama serve`). Details: {str(err)}"
+                    yield f"❌ Ollama Error: Check Endpoint URL & Ensure Ollama is running. Error: {str(err)}"
 
             output_text = st.write_stream(response_generator())
             current_messages.append({"role": "assistant", "content": output_text})
@@ -187,8 +189,8 @@ if active_tab == "💬 Adaptive AI Chat Mentor":
 
     if len(current_messages) == 0:
         welcome_text = (
-            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Local AI Mentor (Fine-Tuned)** active hai.\n\n"
-            f"⚡ **Engine:** Local Ollama (`{ollama_model}`)\n\n"
+            f"Jai Hind Cadet {user_name}! 🇮🇳 **UPSC NDA Local AI Mentor** active hai.\n\n"
+            f"⚡ **Engine:** Ollama (`{ollama_model}`) | **Host:** `{ollama_host}`\n\n"
             f"🎯 **Target:** `{target_exam}` ({target_date_str}) | **Attempt:** `{attempt_no}`"
         )
         current_messages.append({"role": "assistant", "content": welcome_text})
